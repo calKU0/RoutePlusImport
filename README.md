@@ -2,7 +2,7 @@
 
 > 💼 **Commercial Project** — part of a client-facing initiative.
 
-A .NET 10 Worker Service application that automates bidirectional data synchronization between a route optimization system (RoutePlus) and the GoNet ERP system via SFTP.
+A .NET 10 Worker Service application that automates bidirectional data synchronization between a route optimization system (RoutePlus) and the GoNet CRM system via SFTP.
 
 ## Overview
 
