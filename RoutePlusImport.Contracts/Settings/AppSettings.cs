@@ -9,5 +9,7 @@
         public int WorkingIntervalMinutes { get; set; }
         public int LogsExpirationDays { get; set; }
         public string ExportDirectory { get; set; }
+        public int RouteFilterStartDays { get; set; }
+        public int RouteFilterEndDays { get; set; }
     }
 }

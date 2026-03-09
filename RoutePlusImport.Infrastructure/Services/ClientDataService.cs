@@ -102,8 +102,12 @@ namespace RoutePlusImport.Infrastructure.Services
                 var plannedDates = await _clientRepository.GetClientPlannedDates();
                 var plannedDatesDict = plannedDates.ToDictionary(pd => pd.ClientId);
 
-                var twoWeeksFromNow = DateTime.Today.AddDays(14);
-                var today = DateTime.Today;
+                var filterStartDate = DateTime.Today.AddDays(_appSettings.RouteFilterStartDays);
+                var filterEndDate = DateTime.Today.AddDays(_appSettings.RouteFilterEndDays);
+
+                _logger.LogInformation("Filtering route points between {StartDate} and {EndDate}", 
+                    filterStartDate.ToString("yyyy-MM-dd"), 
+                    filterEndDate.ToString("yyyy-MM-dd"));
 
                 await UpdatePlannedDatesFromVisits(routePointsList, plannedDatesDict);
 
@@ -116,7 +120,7 @@ namespace RoutePlusImport.Infrastructure.Services
                         System.Globalization.DateTimeStyles.None,
                         out var visitDate))
                     {
-                        return visitDate >= today && visitDate <= twoWeeksFromNow;
+                        return visitDate >= filterStartDate && visitDate <= filterEndDate;
                     }
                     return false;
                 }).ToList();
