@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="RoutePlusImport.Contracts/RoutePlusImport.Contracts.csproj" />
+  <Project Path="RoutePlusImport.Infrastructure/RoutePlusImport.Infrastructure.csproj" />
+  <Project Path="RoutePlusImport.Service/RoutePlusImport.Service.csproj" />
+</Solution>
