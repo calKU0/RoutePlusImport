@@ -9,8 +9,6 @@ namespace RoutePlusImport.Service
         private readonly ILogger<Worker> _logger;
         private readonly AppSettings _appSettings;
         private readonly IClientDataService _clientDataService;
-        private DateTime? _lastClientProcessDate;
-        private DateTime? _lastRoutePointProcessDate;
 
         public Worker(ILogger<Worker> logger, IOptions<AppSettings> appSettings, IClientDataService clientDataService)
         {
@@ -25,33 +23,71 @@ namespace RoutePlusImport.Service
             {
                 try
                 {
-                    _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    var now = DateTime.Now;
+                    var nextRun = GetNextScheduledRun(now);
 
-                    var currentDate = DateTime.Today;
-                    var currentHour = DateTime.Now.Hour;
+                    var delay = nextRun - now;
+                    _logger.LogInformation("Next scheduled run at: {nextRun}. Waiting for {delay}", nextRun, delay);
 
-                    if (currentHour == _appSettings.SendingHour &&
-                        (!_lastClientProcessDate.HasValue || _lastClientProcessDate.Value.Date < currentDate))
-                    {
-                        await _clientDataService.ProcessClientVisitsAsync();
-                        await _clientDataService.ProcessClientAddressesAsync();
-                        _lastClientProcessDate = DateTime.Now;
-                    }
+                    await Task.Delay(delay, stoppingToken);
 
-                    if (currentHour == _appSettings.DownloadHour &&
-                        (!_lastRoutePointProcessDate.HasValue || _lastRoutePointProcessDate.Value.Date < currentDate))
-                    {
-                        await _clientDataService.ProcessRoutePointsAsync();
-                        _lastRoutePointProcessDate = DateTime.Now;
-                    }
+                    if (stoppingToken.IsCancellationRequested)
+                        break;
+
+                    await ExecuteScheduledTask(nextRun.Hour);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error occurred while processing client data");
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                 }
-                finally
+            }
+        }
+
+        private DateTime GetNextScheduledRun(DateTime now)
+        {
+            var today = now.Date;
+            var sendingTime = today.AddHours(_appSettings.SendingHour);
+            var downloadTime = today.AddHours(_appSettings.DownloadHour);
+
+            var candidates = new List<DateTime>();
+
+            if (sendingTime > now)
+                candidates.Add(sendingTime);
+            else
+                candidates.Add(sendingTime.AddDays(1));
+
+            if (downloadTime > now)
+                candidates.Add(downloadTime);
+            else
+                candidates.Add(downloadTime.AddDays(1));
+
+            return candidates.Min();
+        }
+
+        private async Task ExecuteScheduledTask(int hour)
+        {
+            _logger.LogInformation("Executing scheduled task at hour: {hour}", hour);
+
+            if (hour == _appSettings.SendingHour)
+            {
+                _logger.LogInformation("Processing client visits and addresses");
+                await _clientDataService.ProcessClientVisitsAsync();
+                await _clientDataService.ProcessClientAddressesAsync();
+            }
+
+            if (hour == _appSettings.DownloadHour)
+            {
+                var currentDay = (int)DateTime.Now.DayOfWeek;
+                if (currentDay == _appSettings.DownloadDay)
                 {
-                    await Task.Delay(TimeSpan.FromMinutes(_appSettings.WorkingIntervalMinutes), stoppingToken);
+                    _logger.LogInformation("Processing route points on day: {day}", (DayOfWeek)currentDay);
+                    await _clientDataService.ProcessRoutePointsAsync();
+                }
+                else
+                {
+                    _logger.LogInformation("Skipping route points processing. Current day: {currentDay}, Required day: {requiredDay}",
+                        (DayOfWeek)currentDay, (DayOfWeek)_appSettings.DownloadDay);
                 }
             }
         }
