@@ -99,9 +99,6 @@ namespace RoutePlusImport.Infrastructure.Services
 
                 _logger.LogInformation("Imported {Count} route points from CSV", routePointsList.Count);
 
-                var plannedDates = await _clientRepository.GetClientPlannedDates();
-                var plannedDatesDict = plannedDates.ToDictionary(pd => pd.ClientId);
-
                 var filterStartDate = DateTime.Today.AddDays(_appSettings.RouteFilterStartDays);
                 var filterEndDate = DateTime.Today.AddDays(_appSettings.RouteFilterEndDays);
 
@@ -109,7 +106,7 @@ namespace RoutePlusImport.Infrastructure.Services
                     filterStartDate.ToString("yyyy-MM-dd"), 
                     filterEndDate.ToString("yyyy-MM-dd"));
 
-                await UpdatePlannedDatesFromVisits(routePointsList, plannedDatesDict);
+                await UpdatePlannedDatesFromVisits(routePointsList);
 
                 var validRoutePoints = routePointsList.Where(rp =>
                 {
@@ -205,7 +202,7 @@ namespace RoutePlusImport.Infrastructure.Services
             };
         }
 
-        private async Task UpdatePlannedDatesFromVisits(List<RoutePoint> routePoints, Dictionary<int, PlannedVisitDate> plannedDatesDict)
+        private async Task UpdatePlannedDatesFromVisits(List<RoutePoint> routePoints)
         {
             try
             {
@@ -220,12 +217,6 @@ namespace RoutePlusImport.Infrastructure.Services
                 foreach (var clientGroup in clientGroups)
                 {
                     var clientId = clientGroup.Key;
-
-                    if (!plannedDatesDict.TryGetValue(clientId, out var plannedDate))
-                    {
-                        skippedCount++;
-                        continue;
-                    }
 
                     var visitDatesFromFile = clientGroup
                         .Select(rp =>
@@ -243,7 +234,9 @@ namespace RoutePlusImport.Infrastructure.Services
                         })
                         .Where(d => d.HasValue)
                         .Select(d => d.Value)
+                        .Distinct()
                         .OrderBy(d => d)
+                        .Take(6)
                         .ToList();
 
                     if (!visitDatesFromFile.Any())
@@ -252,37 +245,15 @@ namespace RoutePlusImport.Infrastructure.Services
                         continue;
                     }
 
-                    var plannedDates = new List<(int Index, DateTime? Date)>
-                    {
-                        (1, plannedDate.Date1),
-                        (2, plannedDate.Date2),
-                        (3, plannedDate.Date3),
-                        (4, plannedDate.Date4),
-                        (5, plannedDate.Date5),
-                        (6, plannedDate.Date6)
-                    };
-
-                    var mappedDates = MapVisitsToPlannedDates(plannedDates, visitDatesFromFile);
-
-                    DateTime? GetUpdatedDate(int index, DateTime? originalDate)
-                    {
-                        // If original date is in the past, keep it as is
-                        if (originalDate.HasValue && originalDate.Value < DateTime.Today)
-                            return originalDate;
-
-                        // If we have a mapped visit, use it; otherwise null
-                        return mappedDates.ContainsKey(index) ? mappedDates[index] : null;
-                    }
-
                     var updatedPlannedDate = new PlannedVisitDate
                     {
                         ClientId = clientId,
-                        Date1 = GetUpdatedDate(1, plannedDate.Date1),
-                        Date2 = GetUpdatedDate(2, plannedDate.Date2),
-                        Date3 = GetUpdatedDate(3, plannedDate.Date3),
-                        Date4 = GetUpdatedDate(4, plannedDate.Date4),
-                        Date5 = GetUpdatedDate(5, plannedDate.Date5),
-                        Date6 = GetUpdatedDate(6, plannedDate.Date6)
+                        Date1 = visitDatesFromFile.ElementAtOrDefault(0),
+                        Date2 = visitDatesFromFile.ElementAtOrDefault(1),
+                        Date3 = visitDatesFromFile.ElementAtOrDefault(2),
+                        Date4 = visitDatesFromFile.ElementAtOrDefault(3),
+                        Date5 = visitDatesFromFile.ElementAtOrDefault(4),
+                        Date6 = visitDatesFromFile.ElementAtOrDefault(5)
                     };
 
                     var success = await _clientRepository.UpdateClientPlannedDates(updatedPlannedDate);
@@ -313,30 +284,5 @@ namespace RoutePlusImport.Infrastructure.Services
             }
         }
 
-        private Dictionary<int, DateTime?> MapVisitsToPlannedDates(List<(int Index, DateTime? Date)> plannedDates, List<DateTime> visitDatesFromFile)
-        {
-            var result = new Dictionary<int, DateTime?>();
-            var usedVisits = new HashSet<DateTime>();
-
-            var validPlannedDates = plannedDates
-                .Where(pd => pd.Date.HasValue && pd.Date.Value >= DateTime.Today)
-                .OrderBy(pd => pd.Date.Value)
-                .ToList();
-
-            foreach (var visit in visitDatesFromFile.OrderBy(v => v))
-            {
-                var nearestPlanned = validPlannedDates
-                    .Where(pd => !result.ContainsKey(pd.Index))
-                    .OrderBy(pd => Math.Abs((pd.Date.Value - visit).TotalDays))
-                    .FirstOrDefault();
-
-                if (nearestPlanned.Index > 0)
-                {
-                    result[nearestPlanned.Index] = visit;
-                }
-            }
-
-            return result;
-        }
     }
 }
