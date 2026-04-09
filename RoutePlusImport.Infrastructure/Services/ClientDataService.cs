@@ -102,8 +102,8 @@ namespace RoutePlusImport.Infrastructure.Services
                 var filterStartDate = DateTime.Today.AddDays(_appSettings.RouteFilterStartDays);
                 var filterEndDate = DateTime.Today.AddDays(_appSettings.RouteFilterEndDays);
 
-                _logger.LogInformation("Filtering route points between {StartDate} and {EndDate}", 
-                    filterStartDate.ToString("yyyy-MM-dd"), 
+                _logger.LogInformation("Filtering route points between {StartDate} and {EndDate}",
+                    filterStartDate.ToString("yyyy-MM-dd"),
                     filterEndDate.ToString("yyyy-MM-dd"));
 
                 await UpdatePlannedDatesFromVisits(routePointsList);
@@ -226,7 +226,9 @@ namespace RoutePlusImport.Infrastructure.Services
                                 "yyyyMMdd",
                                 System.Globalization.CultureInfo.InvariantCulture,
                                 System.Globalization.DateTimeStyles.None,
-                                out var visitDate))
+                                out var visitDate)
+                                && visitDate >= System.Data.SqlTypes.SqlDateTime.MinValue.Value
+                                && visitDate <= System.Data.SqlTypes.SqlDateTime.MaxValue.Value)
                             {
                                 return (DateTime?)visitDate;
                             }
@@ -245,15 +247,19 @@ namespace RoutePlusImport.Infrastructure.Services
                         continue;
                     }
 
+                    DateTime? GetDateOrNull(int index) => index < visitDatesFromFile.Count
+                        ? visitDatesFromFile[index]
+                        : null;
+
                     var updatedPlannedDate = new PlannedVisitDate
                     {
                         ClientId = clientId,
-                        Date1 = visitDatesFromFile.ElementAtOrDefault(0),
-                        Date2 = visitDatesFromFile.ElementAtOrDefault(1),
-                        Date3 = visitDatesFromFile.ElementAtOrDefault(2),
-                        Date4 = visitDatesFromFile.ElementAtOrDefault(3),
-                        Date5 = visitDatesFromFile.ElementAtOrDefault(4),
-                        Date6 = visitDatesFromFile.ElementAtOrDefault(5)
+                        Date1 = GetDateOrNull(0),
+                        Date2 = GetDateOrNull(1),
+                        Date3 = GetDateOrNull(2),
+                        Date4 = GetDateOrNull(3),
+                        Date5 = GetDateOrNull(4),
+                        Date6 = GetDateOrNull(5)
                     };
 
                     var success = await _clientRepository.UpdateClientPlannedDates(updatedPlannedDate);
