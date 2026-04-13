@@ -2,6 +2,6 @@
 {
     public static class ServiceConstants
     {
-        public const string ServiceName = "GaskaRoutePlusImportService";
+        public const string ServiceName = "RoutePlusImport";
     }
 }
